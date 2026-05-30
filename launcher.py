@@ -139,8 +139,6 @@ class App:
             btn.pack(side="left", padx=(0, 6), ipadx=10, ipady=4)
             self._cam_buttons[val] = btn
 
-        self._on_cam_type_change("local")
-
         # 本地摄像头索引
         self._row_index = Frame(panel, bg=BG_PANEL)
         self._row_index.pack(fill="x", padx=12, pady=2)
@@ -169,6 +167,8 @@ class App:
         Entry(self._row_index2, textvariable=self._cam_index2, width=5,
               font=FONT_MONO, bg=BG_MAIN, fg=FG_TEXT,
               insertbackground=FG_TEXT).pack(side="left", padx=6)
+
+        self._on_cam_type_change("local")
 
     def _on_cam_type_change(self, cam_type: str) -> None:
         """切换摄像头模式，更新按钮高亮和输入框显示"""
