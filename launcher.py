@@ -18,10 +18,10 @@ from tkinter import Tk, Frame, Label, Button, OptionMenu, StringVar, IntVar, \
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from config.settings import PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
+from config.settings import PROFILES_DIR, ACTIONS_DEFS, METRIC_CATALOG, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
-from gesture.engine import GestureEngine
+from actions.engine import ActionEngine
 from keyboard.emitter import KeyboardEmitter
 import cv2
 
@@ -58,11 +58,11 @@ class App:
         self._capture_thread: threading.Thread | None = None
         self._camera_mgr: CameraManager | None = None
         self._pose_est: PoseEstimator | None = None
-        self._gesture_engine: GestureEngine | None = None
+        self._action_engine: ActionEngine | None = None
         self._keyboard_emitter: KeyboardEmitter | None = None
 
         # 共享状态（线程安全——只在 GUI 线程读取）
-        self._current_gesture = "—"
+        self._current_action = "—"
         self._current_key = "—"
         self._fps = 0.0
         self._frame_bytes: bytes | None = None
@@ -205,9 +205,9 @@ class App:
         row1.pack(fill="x", padx=12, pady=6)
         Label(row1, text="当前手势:", font=FONT_NORMAL, fg=FG_DIM,
               bg=BG_PANEL, width=10, anchor="w").pack(side="left")
-        self._gesture_label = Label(row1, text="—", font=("Microsoft YaHei", 16, "bold"),
+        self._action_label = Label(row1, text="—", font=("Microsoft YaHei", 16, "bold"),
                                     fg=FG_ACCENT2, bg=BG_PANEL, anchor="w")
-        self._gesture_label.pack(side="left")
+        self._action_label.pack(side="left")
 
         # 映射按键
         row2 = Frame(panel, bg=BG_PANEL)
@@ -311,13 +311,13 @@ class App:
         tree_frame = Frame(panel, bg=BG_PANEL)
         tree_frame.pack(fill="both", expand=True, padx=8, pady=6)
 
-        columns = ("gesture", "key", "mode")
+        columns = ("action", "key", "mode")
         self._tree = ttk.Treeview(tree_frame, columns=columns,
                                   show="headings", height=10)
-        self._tree.heading("gesture", text="体感动作")
+        self._tree.heading("action", text="体感动作")
         self._tree.heading("key", text="按键")
         self._tree.heading("mode", text="模式")
-        self._tree.column("gesture", width=180)
+        self._tree.column("action", width=180)
         self._tree.column("key", width=80, anchor="center")
         self._tree.column("mode", width=70, anchor="center")
 
@@ -383,7 +383,7 @@ class App:
         try:
             data = json.loads(profile_path.read_text(encoding="utf-8"))
             for m in data.get("mappings", []):
-                gname = m.get("gesture_name", m.get("gesture_id", ""))
+                gname = m.get("action_name", m.get("action_id", ""))
                 key = m.get("key", "").upper()
                 mode = "按住" if m.get("hold", False) else "点击"
                 self._tree.insert("", "end",
@@ -435,7 +435,7 @@ class App:
         self._pose_est.open()
 
         # 手势引擎
-        self._gesture_engine = GestureEngine(str(GESTURE_DEFS))
+        self._action_engine = ActionEngine(str(ACTIONS_DEFS))
 
         # 键盘映射
         profile_path = PROFILES_DIR / f"{self._profile_var.get()}.json"
@@ -477,7 +477,7 @@ class App:
 
         self._camera_mgr = None
         self._pose_est = None
-        self._gesture_engine = None
+        self._action_engine = None
         self._keyboard_emitter = None
 
         cv2.destroyAllWindows()
@@ -486,7 +486,7 @@ class App:
         self._btn_start.configure(state=NORMAL)
         self._btn_stop.configure(state=DISABLED, bg="#555")
         self._status_label.configure(text="● 已停止", fg=FG_DIM)
-        self._gesture_label.configure(text="—")
+        self._action_label.configure(text="—")
         self._key_label.configure(text="—")
         self._fps_label.configure(text="0")
 
@@ -518,41 +518,41 @@ class App:
             frame = frames[0]
             ts = int(time.time() * 1000)
             pose_results = self._pose_est.process(frame, ts) if self._pose_est else []
-            active_gids: set[str] = set()
-            gesture_names: list[str] = []
+            active_aids: set[str] = set()
+            action_names: list[str] = []
 
             if pose_results and pose_results[0]:
                 pr = pose_results[0]
-                if pr and self._gesture_engine:
-                    self._gesture_engine.update(pr)
-                    active_gids = self._gesture_engine.active_gestures
-                    gesture_names = [
-                        self._gesture_engine.gestures.get(g, {}).get("name", g)
-                        for g in active_gids
+                if pr and self._action_engine:
+                    self._action_engine.update(pr)
+                    active_aids = self._action_engine.active_actions
+                    action_names = [
+                        self._action_engine.definitions.get(g, {}).name
+                        for g in active_aids
                     ]
                 # 绘制骨架
                 self._draw_skeleton(frame, pr)
 
             # 映射到键盘
             if self._keyboard_emitter:
-                self._keyboard_emitter.update(active_gids)
+                self._keyboard_emitter.update(active_aids)
 
             # 绘制 HUD
             y = 25
-            for gname in gesture_names:
+            for gname in action_names:
                 cv2.putText(frame, f"[{gname}]", (10, y),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
                 y += 24
 
             # 更新 GUI 共享状态
-            self._current_gesture = gesture_names[0] if gesture_names else "—"
+            self._current_action = action_names[0] if action_names else "—"
             # 获取当前按下的键
-            active_keys = [g.upper() for g in active_gids
+            active_keys = [g.upper() for g in active_aids
                            if g in self._keyboard_emitter._mapping] \
                 if self._keyboard_emitter else []
             key_str = "+".join(
                 self._keyboard_emitter._mapping[g]["key"].upper()
-                for g in active_gids
+                for g in active_aids
                 if g in self._keyboard_emitter._mapping
             ) if self._keyboard_emitter else "—"
             self._current_key = key_str if key_str else "—"
@@ -613,7 +613,7 @@ class App:
         """在主线程更新 GUI"""
         if not self.running:
             return
-        self._gesture_label.configure(text=self._current_gesture)
+        self._action_label.configure(text=self._current_action)
         self._key_label.configure(text=self._current_key)
         self._fps_label.configure(text=f"{self._fps:.0f}")
 

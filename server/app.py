@@ -22,10 +22,10 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
+from config.settings import AppConfig, PROFILES_DIR, ACTIONS_DEFS, METRIC_CATALOG, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
-from gesture.engine import GestureEngine
+from actions.engine import ActionEngine
 from keyboard.emitter import KeyboardEmitter
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,11 +44,11 @@ class AppState:
         self.config = AppConfig()
         self.camera_mgr: Optional[CameraManager] = None
         self.pose_est: Optional[PoseEstimator] = None
-        self.gesture_engine: Optional[GestureEngine] = None
+        self.action_engine: Optional[ActionEngine] = None
         self.keyboard: Optional[KeyboardEmitter] = None
 
         # 当前状态（供 SSE 推送）
-        self.current_gestures: list = []
+        self.current_actions: list = []
         self.current_keys: list = []
         self.fps: float = 0.0
         self.frame_base64: str = ""
@@ -79,7 +79,7 @@ class AppState:
             self.player_count = self.camera_mgr.source_count or 1
 
             # 手势引擎
-            self.gesture_engine = GestureEngine(str(GESTURE_DEFS))
+            self.action_engine = ActionEngine(str(ACTIONS_DEFS))
 
             # 键盘
             self.keyboard = KeyboardEmitter(cooldown_ms=cfg.cooldown_ms)
@@ -142,19 +142,19 @@ async def list_profiles():
     return {"profiles": profiles}
 
 
-@app.get("/api/gestures")
-async def list_gestures():
-    if state.gesture_engine is None:
-        return {"gestures": []}
+@app.get("/api/actions")
+async def list_actions():
+    if state.action_engine is None:
+        return {"actions": []}
     result = []
-    for gid, gdef in state.gesture_engine.gestures.items():
+    for gid, gdef in state.action_engine.definitions.items():
         result.append({
             "id": gid,
             "name": gdef.get("name", gid),
             "type": gdef.get("type", "pose"),
             "conflict_group": gdef.get("conflict_group", ""),
         })
-    return {"gestures": result}
+    return {"actions": result}
 
 
 @app.get("/api/status")
@@ -163,7 +163,7 @@ async def get_status():
         "running": state.running,
         "paused": state.paused,
         "fps": state.fps,
-        "current_gestures": state.current_gestures,
+        "current_actions": state.current_actions,
         "current_keys": state.current_keys,
         "player_count": state.player_count,
         "camera_type": state.config.camera_type,
@@ -243,7 +243,7 @@ async def sse_events():
     async def event_stream():
         while state.running:
             data = {
-                "gestures": state.current_gestures,
+                "actions": state.current_actions,
                 "keys": state.current_keys,
                 "fps": round(state.fps, 1),
                 "paused": state.paused,
@@ -274,7 +274,7 @@ def _capture_loop() -> None:
             time.sleep(0.01)
             continue
 
-        all_gestures = []
+        all_actions = []
         all_keys = []
 
         for i, frame in enumerate(frames):
@@ -283,20 +283,20 @@ def _capture_loop() -> None:
             pose_results = state.pose_est.process(frame, ts)
 
             if not pose_results:
-                all_gestures.append([])
+                all_actions.append([])
                 all_keys.append([])
                 continue
 
             # 手势识别（取第一个检测到的人）
             pr = pose_results[0]
             active = set()
-            if pr and state.gesture_engine:
-                state.gesture_engine.update(pr)
-                active = state.gesture_engine.active_gestures
+            if pr and state.action_engine:
+                state.action_engine.update(pr)
+                active = state.action_engine.active_actions
 
-            gnames = [state.gesture_engine.gestures.get(g, {}).get("name", g)
-                       for g in active] if state.gesture_engine else []
-            all_gestures.append(gnames)
+            gnames = [(state.action_engine.definitions[g].name if g in state.action_engine.definitions else g)
+                       for g in active] if state.action_engine else []
+            all_actions.append(gnames)
 
             # 键盘映射
             if state.keyboard:
@@ -305,7 +305,7 @@ def _capture_loop() -> None:
 
             # 可视化叠加
             if state.config.show_video_feed and pr:
-                _draw_overlay(frame, pr, gnames, state.gesture_engine)
+                _draw_overlay(frame, pr, gnames, state.action_engine)
 
             # 编码帧
             if i == 0:
@@ -314,7 +314,7 @@ def _capture_loop() -> None:
                 state.frame_base64 = base64.b64encode(buf).decode()
 
         # 更新状态
-        state.current_gestures = all_gestures[0] if all_gestures else []
+        state.current_actions = all_actions[0] if all_actions else []
         state.current_keys = all_keys[0] if all_keys else []
 
         # FPS 计算
@@ -330,7 +330,7 @@ def _capture_loop() -> None:
         state.keyboard.release_all()
 
 
-def _draw_overlay(frame, pose, gesture_names, engine) -> None:
+def _draw_overlay(frame, pose, action_names, engine) -> None:
     """在帧上绘制简易骨架和手势名称"""
     h, w = frame.shape[:2]
     # 简易骨架连接
@@ -353,7 +353,7 @@ def _draw_overlay(frame, pose, gesture_names, engine) -> None:
 
     # 手势名
     y_off = 30
-    for gname in gesture_names:
+    for gname in action_names:
         cv2.putText(frame, gname, (10, y_off), cv2.FONT_HERSHEY_SIMPLEX,
                     0.6, (0, 255, 255), 2)
         y_off += 25

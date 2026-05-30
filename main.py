@@ -33,10 +33,10 @@ import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
+from config.settings import AppConfig, PROFILES_DIR, ACTIONS_DEFS, METRIC_CATALOG, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
-from gesture.engine import GestureEngine
+from actions.engine import ActionEngine
 from keyboard.emitter import KeyboardEmitter
 
 
@@ -70,7 +70,7 @@ def run_local(config: AppConfig) -> None:
     pose.open()
 
     # 手势引擎
-    gesture_engine = GestureEngine(str(GESTURE_DEFS))
+    action_engine = ActionEngine(str(ACTIONS_DEFS))
 
     # 键盘映射
     profile_path = PROFILES_DIR / f"{config.profile}.json"
@@ -100,20 +100,20 @@ def run_local(config: AppConfig) -> None:
                 ts = int(time.time() * 1000)
                 pose_results = pose.process(frame, ts)
                 active_names = []
-                active_gids = set()
+                active_aids = set()
 
                 if pose_results:
                     pr = pose_results[0]
                     if pr:
-                        gesture_engine.update(pr)
-                        active_gids = gesture_engine.active_gestures
+                        action_engine.update(pr)
+                        active_aids = action_engine.active_actions
                         active_names = [
-                            gesture_engine.gestures.get(g, {}).get("name", g)
-                            for g in active_gids
+                            action_engine.definitions.get(g, object()).name
+                            for g in active_aids
                         ]
 
                 # 键盘映射
-                emitter.update(active_gids)
+                emitter.update(active_aids)
 
                 # 可视化
                 if pose_results and pose_results[0]:
@@ -192,8 +192,8 @@ def run_dual(config: AppConfig) -> None:
     pose_p2 = PoseEstimator(num_poses=1, model_path=str(MODEL_PATH))
     pose_p2.open()
 
-    ge1 = GestureEngine(str(GESTURE_DEFS))
-    ge2 = GestureEngine(str(GESTURE_DEFS))
+    ge1 = ActionEngine(str(ACTIONS_DEFS))
+    ge2 = ActionEngine(str(ACTIONS_DEFS))
 
     profile_path = PROFILES_DIR / f"{config.profile}.json"
     em1 = KeyboardEmitter(cooldown_ms=config.cooldown_ms)
@@ -218,21 +218,21 @@ def run_dual(config: AppConfig) -> None:
                  pose_p2, ge2, em2, "P2"),
             ]
 
-            for frame, pose_est, gest_eng, emitter, label in players:
+            for frame, pose_est, act_eng, emitter, label in players:
                 if frame is None:
                     continue
                 ts = int(time.time() * 1000)
                 pose_results = pose_est.process(frame, ts)
                 active_names = []
-                active_gids = set()
+                active_aids = set()
 
                 if pose_results and pose_results[0]:
-                    gest_eng.update(pose_results[0])
-                    active_gids = gest_eng.active_gestures
+                    act_eng.update(pose_results[0])
+                    active_aids = act_eng.active_actions
                     active_names = [
-                        gest_eng.gestures.get(g, {}).get("name", g) for g in active_gids
+                        act_eng.definitions.get(g, object()).name for g in active_aids
                     ]
-                emitter.update(active_gids)
+                emitter.update(active_aids)
 
                 if pose_results and pose_results[0]:
                     _draw_skeleton(frame, pose_results[0])
@@ -301,9 +301,9 @@ def _draw_skeleton(frame, pose) -> None:
             cv2.circle(frame, (int(lm.x * w), int(lm.y * h)), 3, (0, 200, 255), -1)
 
 
-def _draw_hud(frame, gesture_names, paused, fps_window) -> None:
+def _draw_hud(frame, action_names, paused, fps_window) -> None:
     y = 25
-    for name in gesture_names:
+    for name in action_names:
         cv2.putText(frame, f"[{name}]", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
         y += 24

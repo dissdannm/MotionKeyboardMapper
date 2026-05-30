@@ -47,10 +47,10 @@ class KeyboardEmitter:
     def __init__(self, cooldown_ms: int = 300) -> None:
         self.cooldown_ms = cooldown_ms / 1000.0
         self._kb = Controller()
-        self._slots: Dict[str, _KeySlot] = {}        # gesture_id → slot
-        self._mapping: Dict[str, dict] = {}           # gesture_id → {key, hold}
+        self._slots: Dict[str, _KeySlot] = {}        # action_id → slot
+        self._mapping: Dict[str, dict] = {}           # action_id → {key, hold}
         self._active_keys: Set[str] = set()
-        self._gesture_to_key: Dict[str, str] = {}     # gesture_id → key_name
+        self._action_to_key: Dict[str, str] = {}      # action_id → key_name
 
     def load_profile(self, profile_path: str) -> None:
         """加载映射配置 (JSON)"""
@@ -60,29 +60,29 @@ class KeyboardEmitter:
 
         self._mapping.clear()
         self._slots.clear()
-        self._gesture_to_key.clear()
+        self._action_to_key.clear()
 
         for m in data.get("mappings", []):
-            gid = m["gesture_id"]
+            gid = m["action_id"]
             key = m["key"]
             hold = m.get("hold", False)
             self._mapping[gid] = {"key": key, "hold": hold}
-            self._gesture_to_key[gid] = key
+            self._action_to_key[gid] = key
             if gid not in self._slots:
                 self._slots[key] = _KeySlot(key=key, hold=hold)
 
         print(f"[Keyboard] 已加载 {len(self._mapping)} 条映射 (profile={data.get('profile_id')})")
 
-    def update(self, active_gestures: Set[str]) -> None:
+    def update(self, active_actions: Set[str]) -> None:
         """
         根据当前激活的手势更新键盘状态。
-        active_gestures: 当前帧激活的手势 ID 集合。
+        active_actions: 当前帧激活的手势 ID 集合。
         """
         now = time.time()
 
         # 确定哪些按键应该被按下
         desired_keys: Dict[str, bool] = {}   # key_name → hold_mode
-        for gid in active_gestures:
+        for gid in active_actions:
             m = self._mapping.get(gid)
             if m is None:
                 continue

@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = ROOT / "config" / "profiles"
 GESTURE_DEFS = ROOT / "gesture" / "definitions" / "standard.json"
+ACTIONS_DEFS = ROOT / "actions" / "definitions" / "naruto_actions.json"
+METRIC_CATALOG = ROOT / "actions" / "definitions" / "metric_catalog.json"
 MODEL_PATH = ROOT / "assets" / "models" / "pose_landmarker_heavy.task"
 
 
