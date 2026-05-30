@@ -18,7 +18,7 @@ from tkinter import Tk, Frame, Label, Button, OptionMenu, StringVar, IntVar, \
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-from config.settings import PROFILES_DIR, GESTURE_DEFS
+from config.settings import PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
 from gesture.engine import GestureEngine
@@ -431,7 +431,7 @@ class App:
 
         # 姿态估计
         num_poses = 2 if cam_type_str == "dual" else 1
-        self._pose_est = PoseEstimator(num_poses=num_poses)
+        self._pose_est = PoseEstimator(num_poses=num_poses, model_path=str(MODEL_PATH))
         self._pose_est.open()
 
         # 手势引擎

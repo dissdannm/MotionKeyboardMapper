@@ -22,7 +22,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS
+from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
 from gesture.engine import GestureEngine
@@ -74,7 +74,7 @@ class AppState:
 
             # 姿态估计
             pc = 2 if cam_cfg.cam_type == CameraType.DUAL else cfg.num_poses
-            self.pose_est = PoseEstimator(num_poses=pc, model_path=cfg.model_path)
+            self.pose_est = PoseEstimator(num_poses=pc, model_path=cfg.model_path or str(MODEL_PATH))
             self.pose_est.open()
             self.player_count = self.camera_mgr.source_count or 1
 

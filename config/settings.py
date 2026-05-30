@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = ROOT / "config" / "profiles"
 GESTURE_DEFS = ROOT / "gesture" / "definitions" / "standard.json"
+MODEL_PATH = ROOT / "assets" / "models" / "pose_landmarker_heavy.task"
 
 
 @dataclass
@@ -22,7 +23,7 @@ class AppConfig:
     camera_fps: int = 30
 
     # --- 姿态检测 ---
-    model_path: str = ""              # 留空则自动下载
+    model_path: str = ""              # 留空则自动使用 assets/models/ 内置模型
     num_poses: int = 1                # 1 或 2
 
     # --- 键盘映射 ---

@@ -33,7 +33,7 @@ import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS
+from config.settings import AppConfig, PROFILES_DIR, GESTURE_DEFS, MODEL_PATH
 from camera.sources import CameraManager, CameraConfig, CameraType
 from pose.estimator import PoseEstimator
 from gesture.engine import GestureEngine
@@ -66,7 +66,7 @@ def run_local(config: AppConfig) -> None:
         return
 
     # 姿态估计
-    pose = PoseEstimator(num_poses=config.num_poses, model_path=config.model_path)
+    pose = PoseEstimator(num_poses=config.num_poses, model_path=config.model_path or str(MODEL_PATH))
     pose.open()
 
     # 手势引擎
@@ -187,9 +187,9 @@ def run_dual(config: AppConfig) -> None:
     if mgr.source_count < 2:
         print("[WARN] 只打开了一个摄像头，但仍以双人模式运行")
 
-    pose_p1 = PoseEstimator(num_poses=1)
+    pose_p1 = PoseEstimator(num_poses=1, model_path=str(MODEL_PATH))
     pose_p1.open()
-    pose_p2 = PoseEstimator(num_poses=1)
+    pose_p2 = PoseEstimator(num_poses=1, model_path=str(MODEL_PATH))
     pose_p2.open()
 
     ge1 = GestureEngine(str(GESTURE_DEFS))
